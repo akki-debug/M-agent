@@ -1,249 +1,94 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
 import yfinance as yf
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
-from typing import Dict, List, Tuple
+import plotly.graph_objs as go
+from crew import run_analysis
 import json
-import threading
-import time
-import pytz
-import ta  # Technical analysis library
-from newsapi import NewsApiClient  # For sentiment analysis
-import sqlite3
-import logging
 
-# --------------------------
-# Configuration & Constants
-# --------------------------
-with open('config.json') as f:
-    CONFIG = json.load(f)
-
-TZ = pytz.timezone('America/New_York')
-plt.style.use('seaborn')
-logging.basicConfig(level=logging.INFO)
-
-# --------------------------
-# Database Setup
-# --------------------------
-def init_db():
-    conn = sqlite3.connect('trading.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS trades
-                 (timestamp DATETIME, agent TEXT, symbol TEXT, 
-                  action TEXT, quantity INT, price REAL)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS portfolios
-                 (timestamp DATETIME, agent TEXT, value REAL)''')
-    conn.commit()
-    conn.close()
-
-init_db()
-
-# --------------------------
-# Data Layer
-# --------------------------
-class DataHandler:
-    def __init__(self):
-        self.historical_data = {}
-        self.realtime_data = {}
-        self.news_client = NewsApiClient(api_key=CONFIG['news_api_key'])
-    
-    def load_historical_data(self, symbols: List[str], start: datetime, end: datetime):
-        for symbol in symbols:
-            data = yf.download(symbol, start=start, end=end)
-            self.historical_data[symbol] = data
-            
-    def get_realtime_data(self, symbol: str):
-        # Implement real-time data feed (e.g., Alpaca API)
-        pass
-    
-    def get_news_sentiment(self, symbol: str) -> float:
-        articles = self.news_client.get_everything(q=symbol, language='en')
-        # Implement sentiment analysis
-        return 0.0
-
-# --------------------------
-# Trading Strategies
-# --------------------------
-class TradingStrategy:
-    def __init__(self, params: Dict):
-        self.params = params
-        
-    def calculate_indicators(self, data: pd.DataFrame) -> pd.DataFrame:
-        raise NotImplementedError
-        
-    def generate_signal(self, data: pd.DataFrame) -> str:
-        raise NotImplementedError
-
-class MeanReversionStrategy(TradingStrategy):
-    def calculate_indicators(self, data):
-        data['rsi'] = ta.momentum.RSIIndicator(data['Close'], window=14).rsi()
-        data['bb_high'] = ta.volatility.BollingerBands(data['Close']).bollinger_hband()
-        data['bb_low'] = ta.volatility.BollingerBands(data['Close']).bollinger_lband()
-        return data
-    
-    def generate_signal(self, data):
-        if data['rsi'].iloc[-1] < 30 and data['Close'].iloc[-1] < data['bb_low'].iloc[-1]:
-            return 'BUY'
-        elif data['rsi'].iloc[-1] > 70 and data['Close'].iloc[-1] > data['bb_high'].iloc[-1]:
-            return 'SELL'
-        return 'HOLD'
-
-class MLPredictiveStrategy(TradingStrategy):
-    def __init__(self, params):
-        super().__init__(params)
-        # Load pre-trained model
-        # self.model = joblib.load(params['model_path'])
-        
-    def calculate_indicators(self, data):
-        # Feature engineering
-        return data
-    
-    def generate_signal(self, data):
-        # Generate predictions
-        return 'HOLD'
-
-# --------------------------
-# Risk Management
-# --------------------------
-class RiskManager:
-    def __init__(self, max_drawdown: float = 0.2, max_position_size: float = 0.1):
-        self.max_drawdown = max_drawdown
-        self.max_position_size = max_position_size
-        
-    def validate_trade(self, agent, symbol: str, quantity: int, price: float) -> bool:
-        # Implement comprehensive risk checks
-        return True
-
-# --------------------------
-# Trading Agent
-# --------------------------
-class TradingAgent:
-    def __init__(self, name: str, strategy: TradingStrategy, config: Dict):
-        self.name = name
-        self.strategy = strategy
-        self.cash = config['initial_cash']
-        self.portfolio = {}
-        self.risk_manager = RiskManager()
-        self.trade_history = []
-        self.performance_metrics = {}
-        
-    def update_portfolio(self, symbol: str, action: str, quantity: int, price: float):
-        # Implement order execution logic with transaction costs
-        pass
-    
-    def calculate_metrics(self):
-        # Calculate Sharpe ratio, max drawdown, etc.
-        pass
-
-# --------------------------
-# Market Simulation Engine
-# --------------------------
-class TradingEngine:
-    def __init__(self, agents: List[TradingAgent], data_handler: DataHandler):
-        self.agents = agents
-        self.data_handler = data_handler
-        self.running = False
-        
-    def backtest(self, symbols: List[str], start: datetime, end: datetime):
-        # Implement comprehensive backtesting
-        pass
-    
-    def live_trading(self):
-        # Implement real-time trading loop
-        pass
-
-# --------------------------
-# Streamlit UI Components
-# --------------------------
-def render_sidebar() -> Dict:
-    with st.sidebar:
-        st.header("Market Configuration")
-        symbols = st.multiselect("Select Assets", CONFIG['available_symbols'], default=['SPY'])
-        
-        st.header("Agent Configuration")
-        agent_count = st.number_input("Number of Agents", 1, 10, 3)
-        
-        agents = []
-        for i in range(agent_count):
-            with st.expander(f"Agent {i+1}"):
-                name = st.text_input(f"Name {i+1}", value=f"Agent {i+1}")
-                strategy = st.selectbox(f"Strategy {i+1}", CONFIG['available_strategies'])
-                params = {}
-                agents.append({'name': name, 'strategy': strategy, 'params': params})
-        
-        return {'symbols': symbols, 'agents': agents}
-
-def render_realtime_dashboard(engine: TradingEngine):
-    st.header("Real-time Market Monitor")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.subheader("Price Charts")
-        # Implement real-time charting
-        
-    with col2:
-        st.subheader("Order Book")
-        # Display current orders
-        
-    with col3:
-        st.subheader("Market News")
-        # Show news feed
-
-def render_backtest_results(results: Dict):
-    st.header("Backtesting Analysis")
-    
-    # Performance Metrics
-    st.subheader("Comparative Performance")
-    fig = plt.figure(figsize=(12, 6))
-    # Plot equity curves
-    st.pyplot(fig)
-    
-    # Risk Analysis
-    st.subheader("Risk Metrics")
-    # Display Sharpe ratios, drawdowns, etc.
-    
-    # Trade Analysis
-    st.subheader("Trade History")
-    # Show detailed trade log
-
-# --------------------------
-# Main Application
-# --------------------------
 def main():
-    st.set_page_config(page_title="AI Trading Nexus", layout="wide", page_icon="📊")
+    st.set_page_config(layout="wide")
+    st.title("AI-Powered Advanced Stock Analysis")
+
+    # User input
+    stock_symbol = st.text_input("Enter stock symbol (e.g., AAPL):", "AAPL")
     
-    # Initialize core components
-    data_handler = DataHandler()
-    engine = TradingEngine([], data_handler)
-    
-    # Render UI
-    config = render_sidebar()
-    
-    # Main display area
-    tab1, tab2, tab3 = st.tabs(["Live Trading", "Backtesting", "Research Lab"])
-    
-    with tab1:
-        if st.button("Start Live Trading"):
-            engine.running = True
-            threading.Thread(target=engine.live_trading).start()
+    if st.button("Analyze Stock"):
+        # Run CrewAI analysis
+        with st.spinner("Performing comprehensive stock analysis..."):
+            result = run_analysis(stock_symbol)
+        
+        # Parse the result
+        analysis = json.loads(result)
+        
+        # Display analysis result
+        st.header("AI Analysis Report")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Technical Analysis")
+            st.write(analysis.get('technical_analysis', 'No technical analysis available'))
             
-        if engine.running:
-            render_realtime_dashboard(engine)
-    
-    with tab2:
-        if st.button("Run Backtest"):
-            with st.spinner("Running backtest..."):
-                results = engine.backtest(config['symbols'], 
-                                       datetime.now() - timedelta(days=365),
-                                       datetime.now())
-                render_backtest_results(results)
-    
-    with tab3:
-        st.header("Strategy Development")
-        # Implement strategy backtesting playground
-        # Add code editor component for strategy development
+            st.subheader("Chart Patterns")
+            st.write(analysis.get('chart_patterns', 'No chart patterns identified'))
+        
+        with col2:
+            st.subheader("Fundamental Analysis")
+            st.write(analysis.get('fundamental_analysis', 'No fundamental analysis available'))
+            
+            st.subheader("Sentiment Analysis")
+            st.write(analysis.get('sentiment_analysis', 'No sentiment analysis available'))
+        
+        st.subheader("Risk Assessment")
+        st.write(analysis.get('risk_assessment', 'No risk assessment available'))
+        
+        st.subheader("Competitor Analysis")
+        st.write(analysis.get('competitor_analysis', 'No competitor analysis available'))
+        
+        st.subheader("Investment Strategy")
+        st.write(analysis.get('investment_strategy', 'No investment strategy available'))
+        
+        # Fetch stock data for chart
+        stock = yf.Ticker(stock_symbol)
+        hist = stock.history(period="1y")
+        
+        # Create interactive chart
+        fig = go.Figure()
+        fig.add_trace(go.Candlestick(x=hist.index,
+                                     open=hist['Open'],
+                                     high=hist['High'],
+                                     low=hist['Low'],
+                                     close=hist['Close'],
+                                     name='Price'))
+        
+        # Add volume bars
+        fig.add_trace(go.Bar(x=hist.index, y=hist['Volume'], name='Volume', yaxis='y2'))
+        
+        # Add moving averages
+        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'].rolling(window=50).mean(), name='50-day MA'))
+        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'].rolling(window=200).mean(), name='200-day MA'))
+        
+        fig.update_layout(
+            title=f"{stock_symbol} Stock Analysis",
+            yaxis_title='Price',
+            yaxis2=dict(title='Volume', overlaying='y', side='right'),
+            xaxis_rangeslider_visible=False
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Display key statistics
+        st.subheader("Key Statistics")
+        info = stock.info
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Market Cap", f"${info.get('marketCap', 'N/A'):,}")
+            st.metric("P/E Ratio", round(info.get('trailingPE', 0), 2))
+        with col2:
+            st.metric("52 Week High", f"${info.get('fiftyTwoWeekHigh', 0):,.2f}")
+            st.metric("52 Week Low", f"${info.get('fiftyTwoWeekLow', 0):,.2f}")
+        with col3:
+            st.metric("Dividend Yield", f"{info.get('dividendYield', 0):.2%}")
+            st.metric("Beta", round(info.get('beta', 0), 2))
 
 if __name__ == "__main__":
     main()
