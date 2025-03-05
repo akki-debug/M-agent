@@ -1,11 +1,2 @@
-crewai
-langchain
-ollama
-yfinance
 streamlit
-pandas
-plotly
-scipy
-numpy
-textblob
-ta
+ollama
